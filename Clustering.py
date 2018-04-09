@@ -1,100 +1,223 @@
 import numpy as np
 import os
 import random
-import math
-
+import operator as op
+import functools
+import itertools
+import matplotlib.pyplot as plt
+import scipy.spatial.distance as scp
 
 # pull data from csv
-def ingest_data(root,f):
+def ingest_data(root,f,i):
     file = root+f
     info = []
+    x = 0
     with open(file) as fp:
         lines = fp.readlines()
         for line in lines:
             info.append(line.split(" "))
+            info[x][0] = i
+            x += 1
     return info
 
 
 # pull data for each file in clustering-data/ folder
-def input_data():
+def input_data(option):
+    i = 0
     data = []
     source = 'clustering-data/'
     for root, dirs, filenames in os.walk(source):
         for f in filenames:
-            data.append(ingest_data(root,f))
+            i += 1
+            # append the i as a label to the data, on a different dimension
+            data.append(ingest_data(root,f,i))
+    if option == "2":
+        normalised = Normalise(data)
+        return normalised
     return data
 
+def Normalise(data):
+    new_data = [[] for i in range(len(data))]
+    output_array = [[] for i in range(len(data))]
+    for i in range(0,len(data)):
+        for j in range(0,len(data[i])):
+            new_data[i].append(list(map(float,data[i][j][1:])))
+    # test = np.linalg.norm(data)
+    # print(test)
+    new_array = np.asarray(new_data)
+    x = 1
+    for i in range(0,len(new_data)):
+        new_array[i] /= np.linalg.norm(new_array[i])
+        for j in range(0,len(new_array[i])):
+            output_array[i].append([x]+list(new_array[i][j]))
+        x+=1
+    # new_array = np.asarray(new_data)
+    # answer = np.linalg.norm(new_array)
+    # new_array /= answer
+    return output_array
 
 # define distance measure
-def find_distance(x,y):
-    return math.sqrt(sum([(a - b) ** 2 for a, b in zip(x, y)]))
+def find_distance(x,y,option):
+    if option == "1":
+        return np.linalg.norm(x-y)
+    elif option == "2":
+        return scp.cityblock(x,y)
+    elif option == "3":
+        return scp.cosine(x,y)
+
+
+def get_max_by_col(li, col):
+    return max(li, key=lambda x: x[col])[col]
+
+
+def get_min_by_col(li, col):
+    return min(li, key=lambda x: x[col])[col]
+
 
 def find_minmax(info):
-    min = 0
-    max = 0
+    total_array = []
+    array = np.zeros(shape=(300,2))
     for i in range(0,len(info)):
         for j in range(0,len(info[i])):
-            for ij in range(1,len(info[i][j])):
-                if min > float(info[i][j][ij]):
-                    min = float(info[i][j][ij])
-                if max < float(info[i][j][ij]):
-                    max = float(info[i][j][ij])
-    return min,max
+            total_array.append(info[i][j][1:])
+    for i in range (0,len(total_array[0])):
+        array[i][1] = get_max_by_col(total_array,i)
+        array[i][0] = get_min_by_col(total_array,i)
+    return array
 
 
-def fill_centroid(Min,Max):
-    centroid = []
-    for j in range(0, 300):
-        centroid.append(random.uniform(Min, Max))
+def fill_centroid(min_max_array):
+    centroid = np.zeros(300)
+    for i in range(0, len(min_max_array)):
+        centroid[i] = random.uniform(min_max_array[i][0],min_max_array[i][1])
     return centroid
 
 
-def grouped_distance(centroids,info):
+def grouped_distance(centroids,info,k,option):
     data = np.array(info)
+    list_new = [[] for i in range(k)]
     for i in range(0,len(data)):
         for j in range(0,len(data[i])):
             res_array = []
             # perform distance for each centroid
             for w in range(0,len(centroids)):
-                res_array.append(find_distance(centroids[w],map(float,data[i][j][1:])))
+                res_array.append(find_distance(centroids[w],list(map(float,data[i][j][1:])),option))
             min_dist = res_array.index(min(res_array))
-            # append index of cluster that is closest
-            data[i][j].append(min_dist)
-            # should change this to append the features to a new array, with index corresponding to
-            # the centroid
-    return data
+            list_new[min_dist].append(data[i][j])
+    return list_new
+
+
+def ncr(n, r):
+    r = min(r, n - r)
+    numer = functools.reduce(op.mul, range(n, n - r, -1), 1)
+    denom = functools.reduce(op.mul, range(1, r + 1), 1)
+    return numer // denom
+
+
+def Positives(data_length):
+    cent_lens = []
+    totalpos = []
+    for i in range(0, len(data_length)):
+        cent_lens.append(len(data_length[i]))
+        totalpos.append(ncr(cent_lens[i], 2))
+    return sum(totalpos)
+
+
+def TruePositives(data_length,k):
+    vals = []
+    for i in range(0,len(data_length)):
+        vals.append([sum(1 for x in data_length[i] if x[0] == 1),
+                    sum(1 for x in data_length[i] if x[0] == 2),
+                    sum(1 for x in data_length[i] if x[0] == 3),
+                    sum(1 for x in data_length[i] if x[0] == 4)])
+    comb_vals = []
+    for i in range(0,len(vals)):
+        for j in range(0,len(vals[i])):
+            if vals[i][j] >= 2:
+                comb_vals.append(ncr(vals[i][j],2))
+    return sum(comb_vals)
+
+
+def calculations(data_length,k):
+    allPositives = Positives(data_length)
+    tp = TruePositives(data_length,k)
+    fp = allPositives - tp
+    fn = FalseNegatives(data_length)
+    precision = tp/(tp+fp)
+    recall = tp/(tp+fn)
+    f_score = (2*precision*recall)/(precision+recall)
+    print("Precision for k =",k,"is",precision)
+    print("Recall for k =",k,"is",recall)
+    print("F-Score for k =",k,"is",f_score)
+    return  precision,recall,f_score
+
+
+def FalseNegatives(data_length):
+    vals = []
+    for i in range(0, len(data_length)):
+        vals.append([sum(1 for x in data_length[i] if x[0] == 1),
+                     sum(1 for x in data_length[i] if x[0] == 2),
+                     sum(1 for x in data_length[i] if x[0] == 3),
+                     sum(1 for x in data_length[i] if x[0] == 4)])
+    combs = list(map(list,zip(*vals)))
+    allcombs = []
+    for i in range(0, len(combs)):
+        allcombs.append(list(itertools.combinations(combs[i],2)))
+    multiplicands = []
+    for i in range(0, len(allcombs)):
+        for j in range(0,len(allcombs[i])):
+            if 0 not in allcombs[i][j]:
+                multiplicands.append(np.prod(np.array(allcombs[i][j])))
+    return sum(multiplicands)
+
 
 def main():
-    k = 4
-    info = input_data()
+    k = [1,2,3,4,5,6,7,8,9,10]
+    option = input("Normalise Data? 1 = No, 2 = Yes ")
+    info = input_data(option)
 
-    # picking a random point as a centroid - 1 from each file
-    # randint = random.randint(0,59)
-    # centroid_1 = np.asarray(info[0][randint][1:]).astype(float)
-    # centroid_2 = np.asarray(info[0][randint+1][1:]).astype(float)
+    min_max_list = find_minmax(info)
+    prec_arr = []
+    rec_arr = []
+    f_array = []
+    option_dist = input("Choose distance measure: 1 = Euclidean, 2 = Manhatten Distance, 3 = Cosine Similarity ")
+    for wz in range(0,len(k)):
+        centroids = []
+        for i in range(0,k[wz]):
+            centroids.append(fill_centroid(min_max_list))
 
-    # finding the euclidean distance between 2 points
-    # dist = distance((centroid_1[1:]),centroid_2[1:])
-    # print(dist)
+        centroids_old_pos = centroids
+        centroids_new_pos = np.zeros(shape=(4, 300))
 
-    # defining the number of created centroids
-    centroids = []
-    Min,Max = find_minmax(info)
-    for i in range(0,k):
-        centroids.append(fill_centroid(Min,Max))
+        while np.array_equal(centroids_old_pos,centroids_new_pos) == False:
+            centroids_old_pos = centroids
+            data_length = grouped_distance(centroids,info,k[wz], option_dist)
+            # aggregated = [np.zeros(301),np.zeros(301),np.zeros(301),np.zeros(301)]
+            aggregated = [np.zeros(301) for i in range(k[wz])]
+            for i in range(0,len(data_length)):
 
-    labelled_info = grouped_distance(centroids,info)
+                if len(data_length[i]) < 1:
+                    aggregated[i][1:] = np.asarray(centroids[i])
+                else:
+                    array = np.asarray(np.asfarray(data_length[i]))
+                    # array = [item[1:] for item in array[i]]
+                    aggregated[i] = np.mean(array,axis=0)
+            centroids = [item[1:] for item in aggregated]
+            centroids_new_pos = [item[1:] for item in aggregated]
 
-    # next step is to get averaged value of cluster
+        prec,rec,f = calculations(data_length, k[wz])
+        print("Cluster with", k[wz], "centroids has reached minimum")
+        prec_arr.append(prec)
+        rec_arr.append(rec)
+        f_array.append(f)
 
-
-# starting with 4 clusters -- 1 for each category
-# process:
-# randomly choose k points - create k points with 300 randomly generated features each
-# calculate distance of points to all other points - placing closest into bins
-# will have 4 bins at the end of an iteration
-# take average of bins, that is the new centroid
-
+    plt.plot(k,prec_arr,label="Precision")
+    plt.plot(k,rec_arr,label="Recall")
+    plt.plot(k,f_array,label="F-Score")
+    plt.xlabel("K")
+    plt.ylabel("Metric Score")
+    plt.legend()
+    plt.show()
 
 if __name__ == "__main__":
     main()
