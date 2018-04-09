@@ -36,14 +36,14 @@ def input_data(option):
         return normalised
     return data
 
+
+# perform normalisation of input data on a class by class basis
 def Normalise(data):
     new_data = [[] for i in range(len(data))]
     output_array = [[] for i in range(len(data))]
     for i in range(0,len(data)):
         for j in range(0,len(data[i])):
             new_data[i].append(list(map(float,data[i][j][1:])))
-    # test = np.linalg.norm(data)
-    # print(test)
     new_array = np.asarray(new_data)
     x = 1
     for i in range(0,len(new_data)):
@@ -51,12 +51,10 @@ def Normalise(data):
         for j in range(0,len(new_array[i])):
             output_array[i].append([x]+list(new_array[i][j]))
         x+=1
-    # new_array = np.asarray(new_data)
-    # answer = np.linalg.norm(new_array)
-    # new_array /= answer
     return output_array
 
-# define distance measure
+
+# define distance measure and carry out distance calculation
 def find_distance(x,y,option):
     if option == "1":
         return np.linalg.norm(x-y)
@@ -66,14 +64,18 @@ def find_distance(x,y,option):
         return scp.cosine(x,y)
 
 
+# return max of a nested list's column, to be used
+# in generating centroids
 def get_max_by_col(li, col):
     return max(li, key=lambda x: x[col])[col]
 
-
+# return min of a nested list's column, to be used
+# in generating centroids
 def get_min_by_col(li, col):
     return min(li, key=lambda x: x[col])[col]
 
-
+# place all data in one nested list and find min and max
+# of each row for centroid generation
 def find_minmax(info):
     total_array = []
     array = np.zeros(shape=(300,2))
@@ -86,6 +88,7 @@ def find_minmax(info):
     return array
 
 
+# fill centroids depending on minimum and maximum of each column
 def fill_centroid(min_max_array):
     centroid = np.zeros(300)
     for i in range(0, len(min_max_array)):
@@ -93,6 +96,7 @@ def fill_centroid(min_max_array):
     return centroid
 
 
+# find the distances from each centroid to each point and pick the smallest
 def grouped_distance(centroids,info,k,option):
     data = np.array(info)
     list_new = [[] for i in range(k)]
@@ -107,6 +111,7 @@ def grouped_distance(centroids,info,k,option):
     return list_new
 
 
+# perform combination calculation for precision, recall and f-score
 def ncr(n, r):
     r = min(r, n - r)
     numer = functools.reduce(op.mul, range(n, n - r, -1), 1)
@@ -114,6 +119,7 @@ def ncr(n, r):
     return numer // denom
 
 
+# get both true and false positives
 def Positives(data_length):
     cent_lens = []
     totalpos = []
@@ -122,7 +128,7 @@ def Positives(data_length):
         totalpos.append(ncr(cent_lens[i], 2))
     return sum(totalpos)
 
-
+# get true positives
 def TruePositives(data_length,k):
     vals = []
     for i in range(0,len(data_length)):
@@ -138,6 +144,7 @@ def TruePositives(data_length,k):
     return sum(comb_vals)
 
 
+# perform accuracy calculations
 def calculations(data_length,k):
     allPositives = Positives(data_length)
     tp = TruePositives(data_length,k)
@@ -152,6 +159,7 @@ def calculations(data_length,k):
     return  precision,recall,f_score
 
 
+# get false negatives
 def FalseNegatives(data_length):
     vals = []
     for i in range(0, len(data_length)):
@@ -171,6 +179,7 @@ def FalseNegatives(data_length):
     return sum(multiplicands)
 
 
+# main method
 def main():
     k = [1,2,3,4,5,6,7,8,9,10]
     option = input("Normalise Data? 1 = No, 2 = Yes ")
