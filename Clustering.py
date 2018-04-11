@@ -5,7 +5,9 @@ import operator as op
 import functools
 import itertools
 import matplotlib.pyplot as plt
+import math
 import scipy.spatial.distance as scp
+
 
 # pull data from csv
 def ingest_data(root,f,i):
@@ -29,7 +31,7 @@ def input_data(option):
     for root, dirs, filenames in os.walk(source):
         for f in filenames:
             i += 1
-            # append the i as a label to the data, on a different dimension
+            # append the i as a label for each cluster
             data.append(ingest_data(root,f,i))
     if option == "2":
         normalised = Normalise(data)
@@ -57,10 +59,17 @@ def Normalise(data):
 # define distance measure and carry out distance calculation
 def find_distance(x,y,option):
     if option == "1":
+        # return math.sqrt(sum([(a - b) ** 2 for a, b in zip(x, y)]))
         return np.linalg.norm(x-y)
     elif option == "2":
+        # return sum([(a - b) for a,b in zip(x, y)])
         return scp.cityblock(x,y)
     elif option == "3":
+        # numer = sum([a*b for a,b in zip(x,y)])
+        # denom_1 = math.sqrt(sum([a ** 2 for a in x]))
+        # denom_2 = math.sqrt(sum([b ** 2 for b in y]))
+        # return numer/(denom_1*denom_2)
+        # return sum([sum(a*b)/ (math.sqrt(a**2)*math.sqrt(b**2)) for a, b in zip(x,y)])
         return scp.cosine(x,y)
 
 
@@ -69,13 +78,15 @@ def find_distance(x,y,option):
 def get_max_by_col(li, col):
     return max(li, key=lambda x: x[col])[col]
 
+
 # return min of a nested list's column, to be used
 # in generating centroids
 def get_min_by_col(li, col):
     return min(li, key=lambda x: x[col])[col]
 
+
 # place all data in one nested list and find min and max
-# of each row for centroid generation
+# of each column for centroid generation
 def find_minmax(info):
     total_array = []
     array = np.zeros(shape=(300,2))
@@ -128,6 +139,7 @@ def Positives(data_length):
         totalpos.append(ncr(cent_lens[i], 2))
     return sum(totalpos)
 
+
 # get true positives
 def TruePositives(data_length,k):
     vals = []
@@ -137,6 +149,7 @@ def TruePositives(data_length,k):
                     sum(1 for x in data_length[i] if x[0] == 3),
                     sum(1 for x in data_length[i] if x[0] == 4)])
     comb_vals = []
+    print(vals)
     for i in range(0,len(vals)):
         for j in range(0,len(vals[i])):
             if vals[i][j] >= 2:
@@ -182,6 +195,7 @@ def FalseNegatives(data_length):
 # main method
 def main():
     k = [1,2,3,4,5,6,7,8,9,10]
+    # k = [4]
     option = input("Normalise Data? 1 = No, 2 = Yes ")
     info = input_data(option)
 
@@ -201,7 +215,6 @@ def main():
         while np.array_equal(centroids_old_pos,centroids_new_pos) == False:
             centroids_old_pos = centroids
             data_length = grouped_distance(centroids,info,k[wz], option_dist)
-            # aggregated = [np.zeros(301),np.zeros(301),np.zeros(301),np.zeros(301)]
             aggregated = [np.zeros(301) for i in range(k[wz])]
             for i in range(0,len(data_length)):
 
@@ -213,6 +226,9 @@ def main():
                     aggregated[i] = np.mean(array,axis=0)
             centroids = [item[1:] for item in aggregated]
             centroids_new_pos = [item[1:] for item in aggregated]
+
+        # for i in range(0,len(data_length)):
+        #     print(len(data_length[i]))
 
         prec,rec,f = calculations(data_length, k[wz])
         print("Cluster with", k[wz], "centroids has reached minimum")
